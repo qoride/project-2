@@ -8,14 +8,14 @@ using namespace std;
 const string symMap[] = {"  ","░░","▒▒","▓▓","██"}; //ASCII reference map
 
 struct gameActor{
+    //MAX values
 
 };
 
 //PROTOTYPES
-int Reference(string s, string l = "pattern");
+int Reference(string s, string l);
 void clearStream();
 
-vector<tileSpace> customs;
 
 int main(){
     
@@ -29,13 +29,5 @@ void clearStream(){ //reject the rest of the inputs
 }
 
 int Reference(string s, string l){ //returns the index of a string from the given array
-    int size = (l == "operator")?5:patterns.size();
-    for(int i = 0; i < size; i++){
-        if(l == "operator"){
-            if(s == operators[i])return i;
-        }else{
-            if(s == patterns.at(i))return i;
-        }
-    }
     return -1;
 }
