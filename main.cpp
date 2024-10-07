@@ -7,29 +7,6 @@
 using namespace std;
 const string symMap[] = {"  ","░░","▒▒","▓▓","██"}; //ASCII reference map
 
-struct gameActor;
-struct item;
-struct checks;
-struct statusEffect;
-struct equipment;
-struct discipline;
-
-//PROTOTYPES
-int Reference(string s, string l);
-void clearStream();
-void onHit(gameActor attacker, gameActor target);
-void onAttacked(gameActor attacker, gameActor target);
-void onDefense(gameActor attacker, gameActor target);
-void onEvade(gameActor attacker, gameActor target);
-void turnStart(gameActor subject);
-void turnEnd(gameActor subject);
-
-int main(){
-    
-    return 0;
-}
-
-//DEFINITIONS
 struct discipline{
     bool holy;
     string path;
@@ -45,16 +22,17 @@ struct checks{
     float reqINT;
 };
 
-struct statusEffects{
+struct statusEffect{
     int ID;
     int potency;
     int count;
+    vector<string> procs;
 };
 
 struct item{
     string type;
     checks requirements;
-    vector<statusEffects> bonuses;
+    vector<statusEffect> bonuses;
 };
 
 struct equipment{
@@ -91,6 +69,41 @@ struct gameActor{
     vector<item> inventory;
     equipment equips;
 };
+
+//PROTOTYPES
+int Reference(string s, string l);
+void clearStream();
+void onHit(gameActor attacker, gameActor target);
+void onAttacked(gameActor attacker, gameActor target);
+void onDefense(gameActor attacker, gameActor target);
+void onEvade(gameActor attacker, gameActor target);
+void turnStart(gameActor subject);
+void turnEnd(gameActor subject);
+
+int main(){
+    string event = "none";
+
+    return 0;
+}
+
+//DEFINITIONS
+struct statusEffect newEffect(string name, int p, int c, vector<string> activate){
+    struct statusEffect effect;
+    effect.ID = Reference(name,"effects");
+    effect.potency = p;
+    effect.count = c;
+    effect.procs = activate;
+}
+
+void procEffect(gameActor subject, statusEffect effect){
+    switch(effect.ID){
+    case 0:
+        break;
+    
+    default: //unrecognized effect
+        break;
+    }
+}
 
 void onHit(gameActor attacker, gameActor target){
 
