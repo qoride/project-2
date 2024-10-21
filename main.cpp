@@ -6,11 +6,10 @@
 
 using namespace std;
 const string symMap[] = {"  ","░░","▒▒","▓▓","██"}; //ASCII reference map
-const vector<string> effectLibrary = {"strength","endurance","haste","focus","bleed","burn","regeneration","poison","","","","","",};
+const vector<string> effectLibrary = {"strength","endurance","haste","focus","bleed","burn","regeneration"};
 
-struct discipline{
-    bool holy;
-    string path;
+struct charClass{
+    string className;
 };
 
 struct checks{
@@ -45,6 +44,18 @@ struct equipment{
     vector<item> accessories;
 };
 
+struct skill{
+    string name;
+    int min;
+    int max;
+    int flat;
+    int cost;
+    string scalingType;
+    string damageType;
+    string targetType;
+    vector<statusEffect> effects;
+};
+
 struct gameActor{
     //max values
     float maxHP;
@@ -61,20 +72,25 @@ struct gameActor{
     float shield;
     float mana;
     float gold;
-    discipline path;
+    charClass path;
     float attack;
     float defense;
     float speed;
     float intel;
     vector<statusEffect> status;
+    string modus;
     vector<item> inventory;
     equipment equips;
+    vector<skill> skills;
 };
 
 //PROTOTYPES
+statusEffect newEffect(string name, int p, int c, vector<string> activate);
+skill newSkill(string name, int lowest, int highest, int base, int cost, string scale, string damage, string target, vector<string> bonuses);
 int Reference(string s, vector<string> l);
 void clearStream();
-void onHit(gameActor attacker, gameActor target, string result);
+void checkAll(gameActor subject, string check);
+void onHit(gameActor attacker, gameActor target, skill attack, string result);
 void turnStart(gameActor subject);
 void turnEnd(gameActor subject);
 
@@ -91,8 +107,23 @@ struct statusEffect newEffect(string name, int p, int c, vector<string> activate
     effect.potency = p;
     effect.count = c;
     effect.procs = activate;
+    return effect;
 }
-//"strength","endurance","haste","focus","bleed","burn","regeneration","poison","","","","","",
+
+struct skill newSkill(string name, int lowest, int highest, int base, int price, string scale, string damage, string target, vector<statusEffect> bonuses){
+    struct skill move;
+    move.name = name;
+    move.min = lowest;
+    move.max = highest;
+    move.flat = base;
+    move.cost = price;
+    move.scalingType = scale;
+    move.damageType = damage;
+    move.targetType = target;
+    move.effects = bonuses;
+    return move;
+}
+
 void procEffect(gameActor subject, statusEffect effect){
     switch(effect.ID){
     case -1: //unknown effect
@@ -118,11 +149,7 @@ void procEffect(gameActor subject, statusEffect effect){
     case 6: //regeneration
         subject.health += effect.potency;
         break;
-    case 7: //poison
-        subject.health -= subject.health*0.01*effect.potency;
-        break;
-    
-    default:
+    default: //you should not be able to trigger this
         break;
     }
     effect.count--;
@@ -134,33 +161,64 @@ void procEffect(gameActor subject, statusEffect effect){
     }
 }
 
-void onHit(gameActor attacker, gameActor target, string result){
+void checkAll(gameActor subject, string check){
+    //STATUS
+    for(int i = 0; i < subject.status.size(); i++){
+        if(Reference(check,subject.status.at(i).procs)!=-1){
+            procEffect(subject,subject.status.at(i));
+        }
+    }
+    //EQUIPS
+    for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
+        if(Reference(check,subject.equips.head.bonuses.at(i).procs)!=-1){
+            procEffect(subject,subject.equips.head.bonuses.at(i));
+        }
+    }
+    for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
+        if(Reference(check,subject.equips.body.bonuses.at(i).procs)!=-1){
+            procEffect(subject,subject.equips.body.bonuses.at(i));
+        }
+    }
+    for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
+        if(Reference(check,subject.equips.legs.bonuses.at(i).procs)!=-1){
+            procEffect(subject,subject.equips.legs.bonuses.at(i));
+        }
+    }
+    for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
+        if(Reference(check,subject.equips.weapon.bonuses.at(i).procs)!=-1){
+            procEffect(subject,subject.equips.weapon.bonuses.at(i));
+        }
+    }
+    for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
+        if(Reference(check,subject.equips.offhand.bonuses.at(i).procs)!=-1){
+            procEffect(subject,subject.equips.offhand.bonuses.at(i));
+        }
+    }
+    //ACCESSORIES
+    for(int j = 0; j < 3; j++){
+        if(subject.equips.accessories.at(j).type != "null"){
+            for(int i = 0; i < subject.equips.accessories.at(j).bonuses.size(); i++){
+                if(Reference(check,subject.equips.accessories.at(j).bonuses.at(i).procs)!=-1){
+                    procEffect(subject,subject.equips.accessories.at(j).bonuses.at(i));
+                }
+            }
+        }
+    }
+}
+
+void onHit(gameActor attacker, gameActor target, skill attack, string result){
     //result can be "Hit", "Blocked", or "Dodged"
     string targetResult = (result == "Hit")?"getHit":(result == "Blocked")?"onBlock":"onDodge";
-    for(int i = 0; i < attacker.status.size(); i++){
-        if(Reference(result,attacker.status.at(i).procs)!=-1){
-            procEffect(attacker,attacker.status.at(i));
-        }
-    }
-    for(int i = 0; i < target.status.size(); i++){
-        if(Reference(targetResult,target.status.at(i).procs)!=-1){
-            procEffect(target,target.status.at(i));
-        }
-    }
+    
+    checkAll(attacker,result);
+
+    checkAll(target,targetResult);
 }
 void turnStart(gameActor subject){
-    for(int i = 0; i < subject.status.size(); i++){
-        if(Reference("turnStart",subject.status.at(i).procs)!=-1){
-            procEffect(subject,subject.status.at(i));
-        }
-    }
+    checkAll(subject,"turnStart");
 }
 void turnEnd(gameActor subject){
-    for(int i = 0; i < subject.status.size(); i++){
-        if(Reference("turnEnd",subject.status.at(i).procs)!=-1){
-            procEffect(subject,subject.status.at(i));
-        }
-    }
+    checkAll(subject,"turnEnd");
 }
 
 void clearStream(){ //reject the rest of the inputs
