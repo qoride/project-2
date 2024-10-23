@@ -25,49 +25,9 @@ struct Checks{
 
 struct StatusEffect{
     int ID;
-    GameActor parent;
     int potency;
     int count;
     vector<string> procs;
-
-    void Proc(){
-        switch(ID){
-        case -1: //NULL effect
-            break;
-        case 0: //strength
-            parent.attack += potency;
-            break;
-        case 1: //endurance
-            parent.defense += potency;
-            break;
-        case 2: //haste
-            parent.speed += potency;
-            break;
-        case 3: //focus
-            parent.intel += potency;
-            break;
-        case 4: //bleed
-            parent.Damage(potency);
-            break;
-        case 5: //burn
-            parent.Damage(potency);
-            break;
-        case 6: //regeneration
-            parent.Heal(potency);
-            break;
-        default: //unknown effect
-            break;
-        }
-        if(count!=-1){ //-1 count == infinite duration usually for equipment
-            count--;
-            if(count <= 0){
-                for(int i = 0; i < parent.status.size(); i++){
-                    if(&parent.status.at(i) == this)Destroy();
-                    break;
-                }
-            }
-        }
-    }
 
     void Destroy(){
         delete this;
@@ -139,7 +99,7 @@ struct GameActor{
 
 //PROTOTYPES
 GameActor newActor();
-StatusEffect newEffect(string name="NULL", GameActor subject=newActor(), int p=1, int c=1, vector<string> activate={"turnStart"});
+StatusEffect newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"});
 Skill newSkill(string name, int lowest, int highest, int base, int cost, string scale, string damage, string target, vector<StatusEffect> bonuses);
 int Reference(string s, vector<string> l);
 void clearStream();
@@ -151,25 +111,27 @@ void turnEnd(GameActor subject);
 int main(){
     string event = "none";
 
-    GameActor none = newActor();
+    GameActor actor = newActor();
 
-    vector<StatusEffect> test;
-    test.push_back(newEffect("strength",none));
-    test.push_back(newEffect("endurance",none));
-    test.push_back(newEffect("haste",none));
+    actor.status = {newEffect("strength",1,3),newEffect("endurance",1,2),newEffect("haste")};
 
-    for(int i = 0; i<test.size();i++){
-        cout << test.at(i).ID << endl;
+    for(int i = 0; i<actor.status.size();i++){
+        cout << actor.status.at(i).count << endl;
+    }
+
+    turnStart(actor);
+
+    for(int i = 0; i<actor.status.size();i++){
+        cout << actor.status.at(i).count << endl;
     }
 
     return 0;
 }
 
 //CONSTRUCTORS
-struct StatusEffect newEffect(string name, GameActor subject, int p, int c, vector<string> activate){
+struct StatusEffect newEffect(string name, int p, int c, vector<string> activate){
     struct StatusEffect effect;
     effect.ID = Reference(name,effectLibrary);
-    effect.parent = subject;
     effect.potency = p;
     effect.count = c;
     effect.procs = activate;
@@ -196,50 +158,101 @@ struct GameActor newActor(){
 }
 
 //DEFINITIONS
+void Proc(GameActor &subject, StatusEffect &effect){
+    switch(effect.ID){
+    case -1: //NULL effect
+        break;
+    case 0: //strength
+        subject.attack += effect.potency;
+        break;
+    case 1: //endurance
+        subject.defense += effect.potency;
+        break;
+    case 2: //haste
+        subject.speed += effect.potency;
+        break;
+    case 3: //focus
+        subject.intel += effect.potency;
+        break;
+    case 4: //bleed
+        subject.Damage(effect.potency);
+        break;
+    case 5: //burn
+        subject.Damage(effect.potency);
+        break;
+    case 6: //regeneration
+        subject.Heal(effect.potency);
+        break;
+    default: //unknown effect
+        break;
+    }
+    if(effect.count!=-1){ //-1 count == infinite duration usually for equipment
+        effect.count--;
+        if(effect.count == 0){
+            for(int i = 0; i < subject.status.size(); i++){
+                if(&subject.status.at(i) == &effect)subject.status.erase(subject.status.begin()+i);
+                break;
+            }
+        }
+    }
+}
 
 void checkAll(GameActor subject, string check){
     //STATUS
-    for(int i = 0; i < subject.status.size(); i++){
-        if(Reference(check,subject.status.at(i).procs)!=-1){
-            subject.status.at(i).Proc();
+    if(subject.status.size()!=0){
+        for(int i = 0; i < subject.status.size(); i++){
+            if(Reference(check,subject.status.at(i).procs)!=-1){
+                Proc(subject,subject.status.at(i));
+            }
         }
     }
     //EQUIPS
-    for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
-        if(Reference(check,subject.equips.head.bonuses.at(i).procs)!=-1){
-            subject.equips.head.bonuses.at(i).Proc();
+    if(subject.equips.head.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
+            if(Reference(check,subject.equips.head.bonuses.at(i).procs)!=-1){
+                Proc(subject,subject.equips.head.bonuses.at(i));
+            }
         }
     }
-    for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
-        if(Reference(check,subject.equips.body.bonuses.at(i).procs)!=-1){
-            subject.equips.body.bonuses.at(i).Proc();
+    if(subject.equips.body.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
+            if(Reference(check,subject.equips.body.bonuses.at(i).procs)!=-1){
+                Proc(subject,subject.equips.body.bonuses.at(i));
+            }
         }
     }
-    for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
-        if(Reference(check,subject.equips.legs.bonuses.at(i).procs)!=-1){
-            subject.equips.legs.bonuses.at(i).Proc();
+    if(subject.equips.legs.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
+            if(Reference(check,subject.equips.legs.bonuses.at(i).procs)!=-1){
+                Proc(subject,subject.equips.legs.bonuses.at(i));
+            }
         }
     }
-    for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
-        if(Reference(check,subject.equips.weapon.bonuses.at(i).procs)!=-1){
-            subject.equips.weapon.bonuses.at(i).Proc();
+    if(subject.equips.weapon.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
+            if(Reference(check,subject.equips.weapon.bonuses.at(i).procs)!=-1){
+                Proc(subject,subject.equips.weapon.bonuses.at(i));
+            }
         }
     }
-    for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
-        if(Reference(check,subject.equips.offhand.bonuses.at(i).procs)!=-1){
-            subject.equips.offhand.bonuses.at(i).Proc();
+    if(subject.equips.offhand.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
+            if(Reference(check,subject.equips.offhand.bonuses.at(i).procs)!=-1){
+                Proc(subject,subject.equips.offhand.bonuses.at(i));
+            }
         }
     }
     //ACCESSORIES
+    /*
     for(int j = 0; j < 3; j++){
         if(subject.equips.accessories.at(j).type != "null"){
             for(int i = 0; i < subject.equips.accessories.at(j).bonuses.size(); i++){
                 if(Reference(check,subject.equips.accessories.at(j).bonuses.at(i).procs)!=-1){
-                    subject.equips.accessories.at(j).bonuses.at(i).Proc();
+                    Proc(subject,subject.equips.accessories.at(j).bonuses.at(i));
                 }
             }
         }
-    }
+    }*/
 }
 
 void onHit(GameActor attacker, GameActor target, Skill attack, string result){
