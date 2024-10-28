@@ -28,6 +28,7 @@ struct StatusEffect{
     int potency;
     int count;
     vector<string> procs;
+    vector<StatusEffect>* parent;
 
     void Destroy(){
         delete this;
@@ -98,44 +99,52 @@ struct GameActor{
 };
 
 //PROTOTYPES
-GameActor newActor();
-StatusEffect newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"});
+GameActor* newActor();
+StatusEffect* newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"});
+void applyEffect(StatusEffect* effect, vector<StatusEffect> &subject);
 Skill newSkill(string name, int lowest, int highest, int base, int cost, string scale, string damage, string target, vector<StatusEffect> bonuses);
 int Reference(string s, vector<string> l);
 void clearStream();
-void checkAll(GameActor subject, string check);
-void onHit(GameActor attacker, GameActor target, Skill attack, string result);
-void turnStart(GameActor subject);
-void turnEnd(GameActor subject);
+void checkAll(GameActor &subject, string check);
+void onHit(GameActor &attacker, GameActor target, Skill attack, string result);
+void turnStart(GameActor &subject);
+void turnEnd(GameActor &subject);
 
 int main(){
     string event = "none";
 
-    GameActor actor = newActor();
+    GameActor* actor = newActor();
 
-    actor.status = {newEffect("strength",1,3),newEffect("endurance",1,2),newEffect("haste")};
+    applyEffect(newEffect("strength",1,3),actor->status);
+    applyEffect(newEffect("endurance",1,2),actor->status);
+    applyEffect(newEffect("haste",1,1),actor->status);
 
-    for(int i = 0; i<actor.status.size();i++){
-        cout << actor.status.at(i).count << endl;
+    for(int i = 0; i<actor->status.size();i++){
+        cout << actor->status.at(i).count << endl;
     }
 
-    turnStart(actor);
+    turnStart(*actor);
 
-    for(int i = 0; i<actor.status.size();i++){
-        cout << actor.status.at(i).count << endl;
+    for(int i = 0; i<actor->status.size();i++){
+        cout << actor->status.at(i).count << endl;
     }
 
     return 0;
 }
 
 //CONSTRUCTORS
-struct StatusEffect newEffect(string name, int p, int c, vector<string> activate){
-    struct StatusEffect effect;
-    effect.ID = Reference(name,effectLibrary);
-    effect.potency = p;
-    effect.count = c;
-    effect.procs = activate;
+struct StatusEffect* newEffect(string name, int p, int c, vector<string> activate){
+    struct StatusEffect* effect = new StatusEffect;
+    effect->ID = Reference(name,effectLibrary);
+    effect->potency = p;
+    effect->count = c;
+    effect->procs = activate;
     return effect;
+}
+
+void applyEffect(StatusEffect* effect, vector<StatusEffect> &subject){
+    subject.push_back(*effect);
+    effect->parent = &subject;
 }
 
 struct Skill newSkill(string SKILLname, int DMG_min, int DMG_max, int DMG, int MPcost, string scale, string damage, string target, vector<StatusEffect> bonuses){
@@ -152,57 +161,58 @@ struct Skill newSkill(string SKILLname, int DMG_min, int DMG_max, int DMG, int M
     return move;
 }
 
-struct GameActor newActor(){
-    struct GameActor actor;
+struct GameActor* newActor(){
+    struct GameActor* actor = new GameActor;
     return actor;
 }
 
 //DEFINITIONS
-void Proc(GameActor &subject, StatusEffect &effect){
-    switch(effect.ID){
+void Proc(GameActor &subject, StatusEffect* effect){
+    switch(effect->ID){
     case -1: //NULL effect
         break;
     case 0: //strength
-        subject.attack += effect.potency;
+        subject.attack += effect->potency;
         break;
     case 1: //endurance
-        subject.defense += effect.potency;
+        subject.defense += effect->potency;
         break;
     case 2: //haste
-        subject.speed += effect.potency;
+        subject.speed += effect->potency;
         break;
     case 3: //focus
-        subject.intel += effect.potency;
+        subject.intel += effect->potency;
         break;
     case 4: //bleed
-        subject.Damage(effect.potency);
+        subject.Damage(effect->potency);
         break;
     case 5: //burn
-        subject.Damage(effect.potency);
+        subject.Damage(effect->potency);
         break;
     case 6: //regeneration
-        subject.Heal(effect.potency);
+        subject.Heal(effect->potency);
         break;
     default: //unknown effect
         break;
     }
-    if(effect.count!=-1){ //-1 count == infinite duration usually for equipment
-        effect.count--;
-        if(effect.count == 0){
-            for(int i = 0; i < subject.status.size(); i++){
-                if(&subject.status.at(i) == &effect)subject.status.erase(subject.status.begin()+i);
-                break;
+    if(effect->count!=-1){ //-1 count == infinite duration usually for equipment
+        effect->count--;
+        if(effect->count == 0){
+            for(auto it = effect->parent->begin(); it != effect->parent->end(); ++it){
+                if(&(*it) == effect){
+                    cout << "hi";
+                }
             }
         }
     }
 }
 
-void checkAll(GameActor subject, string check){
+void checkAll(GameActor &subject, string check){
     //STATUS
     if(subject.status.size()!=0){
         for(int i = 0; i < subject.status.size(); i++){
             if(Reference(check,subject.status.at(i).procs)!=-1){
-                Proc(subject,subject.status.at(i));
+                Proc(subject,&subject.status.at(i));
             }
         }
     }
@@ -210,35 +220,35 @@ void checkAll(GameActor subject, string check){
     if(subject.equips.head.bonuses.size()!=0){
         for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
             if(Reference(check,subject.equips.head.bonuses.at(i).procs)!=-1){
-                Proc(subject,subject.equips.head.bonuses.at(i));
+                Proc(subject,&subject.equips.head.bonuses.at(i));
             }
         }
     }
     if(subject.equips.body.bonuses.size()!=0){
         for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
             if(Reference(check,subject.equips.body.bonuses.at(i).procs)!=-1){
-                Proc(subject,subject.equips.body.bonuses.at(i));
+                Proc(subject,&subject.equips.body.bonuses.at(i));
             }
         }
     }
     if(subject.equips.legs.bonuses.size()!=0){
         for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
             if(Reference(check,subject.equips.legs.bonuses.at(i).procs)!=-1){
-                Proc(subject,subject.equips.legs.bonuses.at(i));
+                Proc(subject,&subject.equips.legs.bonuses.at(i));
             }
         }
     }
     if(subject.equips.weapon.bonuses.size()!=0){
         for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
             if(Reference(check,subject.equips.weapon.bonuses.at(i).procs)!=-1){
-                Proc(subject,subject.equips.weapon.bonuses.at(i));
+                Proc(subject,&subject.equips.weapon.bonuses.at(i));
             }
         }
     }
     if(subject.equips.offhand.bonuses.size()!=0){
         for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
             if(Reference(check,subject.equips.offhand.bonuses.at(i).procs)!=-1){
-                Proc(subject,subject.equips.offhand.bonuses.at(i));
+                Proc(subject,&subject.equips.offhand.bonuses.at(i));
             }
         }
     }
@@ -255,7 +265,7 @@ void checkAll(GameActor subject, string check){
     }*/
 }
 
-void onHit(GameActor attacker, GameActor target, Skill attack, string result){
+void onHit(GameActor &attacker, GameActor target, Skill attack, string result){
     //result can be "Hit", "Blocked", or "Dodged"
     string targetResult = (result == "Hit")?"getHit":(result == "Blocked")?"onBlock":"onDodge";
     
@@ -263,10 +273,10 @@ void onHit(GameActor attacker, GameActor target, Skill attack, string result){
 
     checkAll(target,targetResult);
 }
-void turnStart(GameActor subject){
+void turnStart(GameActor &subject){
     checkAll(subject,"turnStart");
 }
-void turnEnd(GameActor subject){
+void turnEnd(GameActor &subject){
     checkAll(subject,"turnEnd");
 }
 
