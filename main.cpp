@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include "struct.hpp"
 
 using namespace std;
 
@@ -13,167 +14,34 @@ const vector<string> effectLibrary = {"strength","endurance","haste","focus","bl
 
 const vector<string> damageTypes = {"HP","MP","AC"};
 
-int Reference(string s, vector<string> l);
-void clearStream();
-
-//STRUCTURES
-struct CharClass{
-    string className;
-};
-
-struct Checks{
-    int reqLVL;
-    float reqHP;
-    float reqMP;
-    float reqATK;
-    float reqDEF;
-    float reqSPD;
-    float reqINT;
-};
-
-struct StatusEffect{
-    int ID;
-    int potency;
-    int count;
-    vector<string> procs;
-    vector<StatusEffect>* parent;
-
-    bool operator ==(StatusEffect comp){
-        return(ID==comp.ID && potency==comp.potency && procs==comp.procs && parent==comp.parent);
-    }
-};
-
-struct Item{
-    string type;
-    Checks requirements;
-    vector<StatusEffect> bonuses;
-};
-
-struct Equipment{
-    Item head;
-    Item body;
-    Item legs;
-    Item weapon;
-    Item offhand;
-    vector<Item> accessories;
-};
-
-struct Skill{
-    string name;
-    int min;
-    int max;
-    int cost;
-    string scalingType;
-    string damageType;
-    string targetType;
-    vector<StatusEffect> effects;
-};
-
-struct GameActor{
-    string name;
-    
-    //max values
-    float maxHP;
-    float maxMP;
-
-    //base stats
-    float statATK;
-    float statDEF;
-    float statSPD;
-    float statINT;
-
-    //properties
-    bool dead;
-    float health;
-    float shield;
-    float mana;
-
-    int gold;
-    int level;
-    int experience;
-    CharClass path;
-
-    float attack;
-    float defense;
-    float speed;
-    float intel;
-    vector<StatusEffect> status;
-    vector<Item> inventory;
-    Equipment equips;
-    vector<Skill> skills;
-
-    void Damage(float dmg = 0, string damageType = "HP"){
-        switch(Reference(damageType,damageTypes)){
-            case 0: //Health (HP)
-                if(shield > 0)shield -= dmg;
-                if(shield < 0){
-                    dmg += shield;
-                    shield = 0;
-                }
-                health -= (defense < dmg)?dmg-defense:0;
-                break;
-            case 1: //Mana (MP)
-                mana -= dmg;
-                break;
-            case 2: //Shield (AC)
-                shield -= dmg;
-                if(shield < 0)shield = 0;
-                break;
-            default: //Unknown
-                break;
-        }
-    }
-
-    void Heal(float amt = 0, string damageType = "HP"){
-        switch(Reference(damageType,damageTypes)){
-            case 0: //Health (HP)
-                health += amt;
-                if(health > maxHP)health = maxHP;
-                break;
-            case 1: //Mana (MP)
-                mana += amt;
-                if(mana > maxMP)mana = maxMP;
-                break;
-            case 2: //Shield (AC)
-                shield += amt;
-                if(shield > maxHP)shield = maxHP;
-                break;
-            default: //Unknown
-                break;
-        }
-    }
-
-    void Start(){
-        statATK = attack;
-        statDEF = defense;
-        statSPD = speed;
-        statINT = intel;
-    }
-};
-
 //PROTOTYPES
 GameActor newActor(string ACTORname="NULL",float HP_max=100,float MP_max=100,
                    int I_gold=0,float I_shield=0,CharClass I_path={},
                    vector<float> STATS={0,0,0,0},vector<Item> INV={},Equipment EQUIP={},vector<Skill> SKILLS={});
 
 StatusEffect newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"});
-void applyEffect(StatusEffect effect, vector<StatusEffect> &subject);
+void apply(StatusEffect effect, vector<StatusEffect> &subject);
 
 Skill newSkill(string SKILLname, int DMG_min, int DMG_max, int MP_cost, string DMG_scale, string DMG_type, string target, vector<StatusEffect> bonuses);
 
 void checkAll(GameActor &subject, string check);
-void onHit(GameActor &attacker, GameActor target, Skill attack, string result);
+void onHit(GameActor &attacker, GameActor &target, Skill attack, string result);
 void turnStart(GameActor &subject);
 void turnEnd(GameActor &subject);
+
+void clearStream();
+
+//GLOBAL VARIABLES
+vector<GameActor> Enemies;
 
 int main(){
     string event = "none";
 
     GameActor actor = newActor();
 
-    applyEffect(newEffect("strength",1,3),actor.status);
-    applyEffect(newEffect("endurance",1,2),actor.status);
-    applyEffect(newEffect("haste",1,1),actor.status);
+    apply(newEffect("strength",1,3),actor.status);
+    apply(newEffect("endurance",1,2),actor.status);
+    apply(newEffect("haste",1,1),actor.status);
 
     for(int i = 0; i<actor.status.size();i++){
         cout << actor.status.at(i).count << endl;
@@ -198,7 +66,7 @@ struct StatusEffect newEffect(string name, int p, int c, vector<string> activate
     return effect;
 }
 
-void applyEffect(StatusEffect effect, vector<StatusEffect> &subject){
+void apply(StatusEffect effect, vector<StatusEffect> &subject){
     bool duplicate = false;
     for(int i = 0; i < subject.size(); i++){
         if(subject.at(i)==effect){
@@ -360,7 +228,7 @@ void checkAll(GameActor &subject, string check){
     }
 }
 
-void onHit(GameActor &attacker, GameActor &target, Skill &attack, string result){
+void onHit(GameActor &attacker, GameActor &target, Skill attack, string result){
     //result can be "Hit", "Blocked", or "Dodged"
     string targetResult = (result == "Hit")?"getHit":(result == "Blocked")?"onBlock":"onDodge";
     
@@ -380,11 +248,4 @@ void turnEnd(GameActor &subject){
 void clearStream(){ //reject the rest of the inputs
     cin.ignore(std::numeric_limits<std::streamsize>::max(),'\n');
     cin.clear();
-}
-
-int Reference(string s, vector<string> l){ //returns the index of a string from the given vector
-    for(int i = 0; i < l.size(); i++){
-        if(s == l.at(i))return i;
-    }
-    return -1;
 }
