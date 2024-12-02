@@ -1,7 +1,8 @@
 #include <iostream>
 #include <cstdlib>
-#include <vector>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include "struct.hpp"
 
@@ -12,20 +13,20 @@ const string symMap[] = {"  ","░░","▒▒","▓▓","██"}; //ASCII refe
 const vector<string> effectLibrary = {"strength","endurance","haste","focus","bleed","burn",
                                       "regeneration","barrier","injured"};
 
-const vector<string> damageTypes = {"HP","MP","AC"};
-
 //PROTOTYPES
-GameActor newActor(string ACTORname="NULL",float HP_max=100,float MP_max=100,
-                   int I_gold=0,float I_shield=0,CharClass I_path={},
-                   vector<float> STATS={0,0,0,0},vector<Item> INV={},Equipment EQUIP={},vector<Skill> SKILLS={});
+GameActor newActor(string ACTORname,float HP_max,float MP_max,vector<int> I_Val,float I_shield,CharClass I_path,
+                          vector<StatusEffect> efx, vector<float> STATS,
+                          vector<Item> INV,Equipment EQUIP,vector<Skill> SKILLS);
 
-StatusEffect newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"});
+StatusEffect newEffect(string name="NULL", int p=1, int c=1, vector<string> activate={"turnStart"}, string txt="");
 void apply(StatusEffect effect, vector<StatusEffect> &subject);
 
 Skill newSkill(string SKILLname, int DMG_min, int DMG_max, int MP_cost, string DMG_scale, string DMG_type, string target, vector<StatusEffect> bonuses);
 
 void checkAll(GameActor &subject, string check);
-void onHit(GameActor &attacker, GameActor &target, Skill attack, string result);
+StatusEffect checkFor(GameActor &subject, int EffectID);
+vector<StatusEffect> allOf(GameActor &subject, string check = "");
+void Attack(GameActor &attacker, GameActor &target, Skill attack, string result);
 void turnStart(GameActor &subject);
 void turnEnd(GameActor &subject);
 
@@ -36,33 +37,52 @@ vector<GameActor> Enemies;
 
 int main(){
     string event = "none";
+    string input;
 
-    GameActor actor = newActor();
+    GameActor actor = newActor("Player",100,100,    //Health
+                               {1,0,0},0,{},{},{2,0,0,4}, //Stats
+                               {},{},{});           //Items
 
-    apply(newEffect("strength",1,3),actor.status);
-    apply(newEffect("endurance",1,2),actor.status);
-    apply(newEffect("haste",1,1),actor.status);
+    GameActor goblin = newActor("Goblin",50,10,     //Health
+                               {1,0,20},0,{},{},{0,0,0,0},//Stats
+                               {},{},{});           //Items
 
-    for(int i = 0; i<actor.status.size();i++){
-        cout << actor.status.at(i).count << endl;
-    }
+    GameActor golem = newActor("Golem",40,15,
+                               {1,10,5},10,{},{newEffect("barrier",5,3)},{0,2,0,0},
+                               {},{},{});
 
-    turnStart(actor);
+    Enemies.push_back(goblin);
+    Enemies.push_back(golem);
 
-    for(int i = 0; i<actor.status.size();i++){
-        cout << actor.status.at(i).count << endl;
+    actor.Start();
+    for(int i = 0; i < Enemies.size(); i++)Enemies.at(i).Start();
+    while(Enemies.size() > 0 && actor.dead == false){
+        turnStart(actor);
+        cout << endl << "┌─────────────────────────────────────────────────┐" << endl
+        <<              "│ HP: 50/100 ██████████▓▓▓▓▓▓▓▓▓▓          PLAYER │" << endl
+        <<              "│ MP: 8/10   ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░          LVL.10 │" << endl
+        <<              "├─────────────────────────────────────────────────┤" << endl
+        <<              "│ > ATTACK            > SKILL                     │" << endl
+        <<              "│ > BLOCK             > DODGE                     │" << endl
+        <<              "│ > INFO              > ITEM                      │" << endl
+        <<              "├─────────────────────────────────────────────────┤" << endl
+        <<              "│ \"exit\" - Exit the program.                      │" << endl
+        <<              "└─────────────────────────────────────────────────┘" << endl
+        <<              "Please enter a command: ";
+        cin >> input;
     }
 
     return 0;
 }
 
 //CONSTRUCTORS
-struct StatusEffect newEffect(string name, int p, int c, vector<string> activate){
+struct StatusEffect newEffect(string name, int p, int c, vector<string> activate, string txt){
     struct StatusEffect effect;
     effect.ID = Reference(name,effectLibrary);
     effect.potency = p;
     effect.count = c;
     effect.procs = activate;
+    effect.inspectTxt = txt;
     return effect;
 }
 
@@ -97,8 +117,9 @@ struct Skill newSkill(string SKILLname, int DMG_min, int DMG_max, int MP_cost, s
     return move;
 }
 
-struct GameActor newActor(string ACTORname,float HP_max,float MP_max,int I_gold,float I_shield,CharClass I_path,
-                          vector<float> STATS,vector<Item> INV,Equipment EQUIP,vector<Skill> SKILLS)
+struct GameActor newActor(string ACTORname,float HP_max,float MP_max,vector<int> I_Val,float I_shield,CharClass I_path,
+                          vector<StatusEffect> efx, vector<float> STATS,
+                          vector<Item> INV,Equipment EQUIP,vector<Skill> SKILLS)
 {
     struct GameActor actor;
     actor.name = ACTORname;
@@ -110,7 +131,9 @@ struct GameActor newActor(string ACTORname,float HP_max,float MP_max,int I_gold,
     actor.health = HP_max;
     actor.mana = MP_max;
 
-    actor.gold = I_gold;
+    actor.level = (I_Val.size()>0)?I_Val[0]:1;
+    actor.experience = (I_Val.size()>1)?I_Val[1]:0;
+    actor.gold = (I_Val.size()>2)?I_Val[2]:0;
     actor.shield = I_shield;
     actor.path = I_path;
 
@@ -119,7 +142,7 @@ struct GameActor newActor(string ACTORname,float HP_max,float MP_max,int I_gold,
     actor.speed = (STATS.size()>2)?STATS[2]:0;
     actor.intel = (STATS.size()>3)?STATS[3]:0;
 
-    actor.status = {};
+    actor.status = efx;
     actor.inventory = INV;
     actor.equips = EQUIP;
     actor.skills = SKILLS;
@@ -134,27 +157,36 @@ void Proc(GameActor &subject, StatusEffect &effect){
         break;
     case 0: //strength
         subject.attack += effect.potency;
+        cout << subject.name << " is glowing " << ((effect.potency>3)?((effect.potency>6)?"intensely":"bright"):"faintly") << " red!" << endl;
         break;
     case 1: //endurance
         subject.defense += effect.potency;
+        cout << subject.name << " is glowing " << ((effect.potency>3)?((effect.potency>6)?"intensely":"bright"):"faintly") << " yellow!" << endl;
         break;
     case 2: //haste
         subject.speed += effect.potency;
+        cout << subject.name << " is glowing " << ((effect.potency>3)?((effect.potency>6)?"intensely":"bright"):"faintly") << " green!" << endl;
         break;
     case 3: //focus
         subject.intel += effect.potency;
+        cout << subject.name << " is glowing " << ((effect.potency>3)?((effect.potency>6)?"intensely":"bright"):"faintly") << " blue!" << endl;
         break;
     case 4: //bleed
-        subject.Damage(effect.potency);
+        subject.Damage(effect.potency,"HP",false);
+        cout << subject.name << " took " << effect.potency << " bleed damage!" << endl;
         break;
     case 5: //burn
-        subject.Damage(effect.potency);
+        subject.Damage(effect.potency,"HP",false);
+        cout << subject.name << " took " << effect.potency << " burn damage!" << endl;
         break;
     case 6: //regeneration
         subject.Heal(effect.potency);
         break;
     case 7: //barrier
         subject.Heal(effect.potency,"AC");
+        break;
+    case 8: //injured
+        cout << subject.name << " is " << ((effect.potency>3)?((effect.potency>6)?"critically":"heavily"):"slightly") << " injured!";
         break;
     default: //unknown effect
         break;
@@ -163,7 +195,6 @@ void Proc(GameActor &subject, StatusEffect &effect){
         effect.count--;
         if(effect.count == 0){
             for(int i = 0; i < effect.parent->size(); i++){
-                //cout << (effect.parent->at(i) == effect) << endl;
                 if(effect.parent->at(i) == effect){
                     effect.parent->erase(effect.parent->begin()+i);
                     break;
@@ -228,15 +259,132 @@ void checkAll(GameActor &subject, string check){
     }
 }
 
-void onHit(GameActor &attacker, GameActor &target, Skill attack, string result){
+StatusEffect checkFor(GameActor &subject, int EffectID){
+    //STATUS
+    if(subject.status.size()!=0){
+        for(int i = 0; i < subject.status.size(); i++){
+            if(subject.status.at(i).ID == EffectID){
+                return subject.status.at(i);
+            }
+        }
+    }
+    //EQUIPS
+    if(subject.equips.head.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
+            if(subject.equips.head.bonuses.at(i).ID == EffectID){
+                return subject.equips.head.bonuses.at(i);
+            }
+        }
+    }
+    if(subject.equips.body.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
+            if(subject.equips.body.bonuses.at(i).ID == EffectID){
+                return subject.equips.body.bonuses.at(i);
+            }
+        }
+    }
+    if(subject.equips.legs.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
+            if(subject.equips.legs.bonuses.at(i).ID == EffectID){
+                return subject.equips.legs.bonuses.at(i);
+            }
+        }
+    }
+    if(subject.equips.weapon.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
+            if(subject.equips.weapon.bonuses.at(i).ID == EffectID){
+                return subject.equips.weapon.bonuses.at(i);
+            }
+        }
+    }
+    if(subject.equips.offhand.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
+            if(subject.equips.offhand.bonuses.at(i).ID == EffectID){
+                return subject.equips.offhand.bonuses.at(i);
+            }
+        }
+    }
+    //ACCESSORIES
+    for(int j = 0; j < subject.equips.accessories.size(); j++){
+        for(int i = 0; i < subject.equips.accessories.at(j).bonuses.size(); i++){
+            if(subject.equips.accessories.at(j).bonuses.at(i).ID == EffectID){
+                return subject.equips.accessories.at(j).bonuses.at(i);
+            }
+        }
+    }
+    return newEffect("NULL");
+}
+
+vector<StatusEffect> allOf(GameActor &subject, string check){
+    vector<StatusEffect> EffectPool;
+    //STATUS
+    if(subject.status.size()!=0){
+        for(int i = 0; i < subject.status.size(); i++){
+            if(Reference(check,subject.status.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.status.at(i));
+            }
+        }
+    }
+    //EQUIPS
+    if(subject.equips.head.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.head.bonuses.size(); i++){
+            if(Reference(check,subject.equips.head.bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.head.bonuses.at(i));
+            }
+        }
+    }
+    if(subject.equips.body.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.body.bonuses.size(); i++){
+            if(Reference(check,subject.equips.body.bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.body.bonuses.at(i));
+            }
+        }
+    }
+    if(subject.equips.legs.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.legs.bonuses.size(); i++){
+            if(Reference(check,subject.equips.legs.bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.legs.bonuses.at(i));
+            }
+        }
+    }
+    if(subject.equips.weapon.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.weapon.bonuses.size(); i++){
+            if(Reference(check,subject.equips.weapon.bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.weapon.bonuses.at(i));
+            }
+        }
+    }
+    if(subject.equips.offhand.bonuses.size()!=0){
+        for(int i = 0; i < subject.equips.offhand.bonuses.size(); i++){
+            if(Reference(check,subject.equips.offhand.bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.offhand.bonuses.at(i));
+            }
+        }
+    }
+    //ACCESSORIES
+    for(int j = 0; j < subject.equips.accessories.size(); j++){
+        for(int i = 0; i < subject.equips.accessories.at(j).bonuses.size(); i++){
+            if(Reference(check,subject.equips.accessories.at(j).bonuses.at(i).procs)!=-1 || check == ""){
+                EffectPool.push_back(subject.equips.accessories.at(j).bonuses.at(i));
+            }
+        }
+    }
+
+    return EffectPool;
+}
+
+void Attack(GameActor &attacker, GameActor &target, Skill attack, string result){
     //result can be "Hit", "Blocked", or "Dodged"
     string targetResult = (result == "Hit")?"getHit":(result == "Blocked")?"onBlock":"onDodge";
     
     checkAll(attacker,result);
     checkAll(target,targetResult);
+
+    if(target.dead)checkAll(attacker,"onKill");
 }
 
 void turnStart(GameActor &subject){
+    cout << "It's " << subject.name << "'s turn!" << endl;
     subject.Start();
     checkAll(subject,"turnStart");
 }
